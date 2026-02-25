@@ -73,14 +73,30 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 		if srcName == "" {
 			srcName = pkg.Name
 		}
+		installedVer := utils.FormatSrcVersion(pkg)
 
 		advisories, err := s.dbc.GetAdvisories(platformName, srcName)
 		if err != nil {
 			return nil, xerrors.Errorf("failed to get RapidFort advisories for %s: %w", srcName, err)
 		}
 
+		s.logger.DebugContext(ctx, "Package advisory lookup",
+			log.String("pkg", srcName),
+			log.String("platform", platformName),
+			log.String("installed", installedVer),
+			log.Int("advisories_found", len(advisories)))
+
 		for _, adv := range advisories {
-			if !s.isVulnerable(ctx, utils.FormatSrcVersion(pkg), adv) {
+			vulnerable := s.isVulnerable(ctx, installedVer, adv)
+			s.logger.DebugContext(ctx, "Advisory check",
+				log.String("pkg", srcName),
+				log.String("cve", adv.VulnerabilityID),
+				log.String("installed", installedVer),
+				log.Any("vulnerable_ranges", adv.VulnerableVersions),
+				log.Any("fixed_versions", adv.PatchedVersions),
+				log.Bool("is_vulnerable", vulnerable))
+
+			if !vulnerable {
 				continue
 			}
 
@@ -103,9 +119,21 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 				vuln.SeveritySource = adv.DataSource.ID
 			}
 
+			s.logger.DebugContext(ctx, "Vulnerability detected",
+				log.String("pkg", pkg.Name),
+				log.String("cve", adv.VulnerabilityID),
+				log.String("installed", vuln.InstalledVersion),
+				log.String("fixed", vuln.FixedVersion),
+				log.String("severity", vuln.Vulnerability.Severity))
+
 			vulns = append(vulns, vuln)
 		}
 	}
+
+	s.logger.DebugContext(ctx, "RapidFort scan complete",
+		log.String("platform", platformName),
+		log.Int("total_vulns", len(vulns)))
+
 	return vulns, nil
 }
 
@@ -126,17 +154,27 @@ func (s *Scanner) checkConstraints(ctx context.Context, installedVersion string,
 		constraints, err := version.NewConstraints(constraintStr, s.comparer)
 		if err != nil {
 			s.logger.DebugContext(ctx, "Failed to parse version constraints",
-				log.String("constraints", constraintStr), log.Err(err))
+				log.String("installed", installedVersion),
+				log.String("constraint", constraintStr),
+				log.Err(err))
 			return false
 		}
 
-		if satisfied, err := constraints.Check(installedVersion); err != nil {
+		satisfied, err := constraints.Check(installedVersion)
+		if err != nil {
 			s.logger.DebugContext(ctx, "Failed to check version constraints",
-				log.String("version", installedVersion),
-				log.String("constraints", constraintStr),
+				log.String("installed", installedVersion),
+				log.String("constraint", constraintStr),
 				log.Err(err))
 			return false
-		} else if satisfied {
+		}
+
+		s.logger.DebugContext(ctx, "Version constraint check",
+			log.String("installed", installedVersion),
+			log.String("constraint", constraintStr),
+			log.Bool("satisfied", satisfied))
+
+		if satisfied {
 			return true
 		}
 	}
@@ -147,5 +185,12 @@ func (s *Scanner) checkConstraints(ctx context.Context, installedVersion string,
 // RapidFort provides its own curated advisories including for EOL distributions,
 // so we never reject a scan based on OS version alone.
 func (s *Scanner) IsSupportedVersion(_ context.Context, _ ftypes.OSType, _ string) bool {
+	return true
+}
+
+// IncludesThirdParty implements driver.ThirdPartyAware.
+// RapidFort curated images may include patched versions of third-party packages
+// (e.g. MariaDB, Docker), so we scan them too rather than filtering them out.
+func (s *Scanner) IncludesThirdParty() bool {
 	return true
 }

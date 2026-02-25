@@ -99,8 +99,13 @@ func (d *Detector) Detect(ctx context.Context) ([]types.DetectedVulnerability, b
 
 	eosl := !d.driver.IsSupportedVersion(ctx, d.target.OS.Family, d.target.OS.Name)
 
-	filteredPkgs := filterPkgs(ctx, d.target.Packages)
-	vulns, err := d.driver.Detect(ctx, d.target.OS.Name, d.target.Repository, filteredPkgs)
+	pkgs := d.target.Packages
+	// Skip third-party filtering only when the driver explicitly opts in
+	// (e.g. RapidFort scanner which has its own advisories for all packages).
+	if tp, ok := d.driver.(driver.ThirdPartyAware); !ok || !tp.IncludesThirdParty() {
+		pkgs = filterPkgs(ctx, pkgs)
+	}
+	vulns, err := d.driver.Detect(ctx, d.target.OS.Name, d.target.Repository, pkgs)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed detection: %w", err)
 	}
