@@ -21,6 +21,7 @@ import (
 	"github.com/aquasecurity/trivy/pkg/detector/ospkg/photon"
 	"github.com/aquasecurity/trivy/pkg/detector/ospkg/redhat"
 	"github.com/aquasecurity/trivy/pkg/detector/ospkg/rocky"
+	"github.com/aquasecurity/trivy/pkg/detector/ospkg/rapidfort"
 	"github.com/aquasecurity/trivy/pkg/detector/ospkg/rootio"
 	"github.com/aquasecurity/trivy/pkg/detector/ospkg/seal"
 	"github.com/aquasecurity/trivy/pkg/detector/ospkg/suse"
@@ -72,11 +73,17 @@ var (
 		rootio.Provider,
 		seal.Provider,
 	}
+
+	// labelProviders dynamically generate drivers based on image config labels.
+	// They are tried before providers and standard OS-specific drivers.
+	labelProviders = []driver.LabelProvider{
+		rapidfort.Provider,
+	}
 )
 
 // NewDetector creates a new Detector for the given scan target
 func NewDetector(target types.ScanTarget) (*Detector, error) {
-	drv, err := newDriver(target.OS.Family, target.Packages)
+	drv, err := newDriver(target.OS.Family, target.Packages, target.ImageLabels)
 	if err != nil {
 		return nil, err
 	}
@@ -122,15 +129,22 @@ func filterPkgs(ctx context.Context, pkgs []ftypes.Package) []ftypes.Package {
 	return filtered
 }
 
-func newDriver(osFamily ftypes.OSType, pkgs []ftypes.Package) (driver.Driver, error) {
-	// Try providers first
+func newDriver(osFamily ftypes.OSType, pkgs []ftypes.Package, labels map[string]string) (driver.Driver, error) {
+	// Try label-aware providers first (e.g. RapidFort curated image detection)
+	for _, provider := range labelProviders {
+		if d := provider(osFamily, pkgs, labels); d != nil {
+			return d, nil
+		}
+	}
+
+	// Try package-pattern providers (e.g. rootio, seal)
 	for _, provider := range providers {
 		if d := provider(osFamily, pkgs); d != nil {
 			return d, nil
 		}
 	}
 
-	// Fall back to standard drivers
+	// Fall back to standard OS-specific drivers
 	if d, ok := drivers[osFamily]; ok {
 		return d, nil
 	}

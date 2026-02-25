@@ -15,3 +15,7 @@ type Driver interface {
 
 // Provider creates a specialized driver based on the environment
 type Provider func(osFamily ftypes.OSType, pkgs []ftypes.Package) Driver
+
+// LabelProvider creates a specialized driver based on the environment and image labels.
+// Use this when detection requires access to container image config labels.
+type LabelProvider func(osFamily ftypes.OSType, pkgs []ftypes.Package, labels map[string]string) Driver
