@@ -277,6 +277,7 @@ func TestScanner_IsVulnerable(t *testing.T) {
 		name             string
 		installedVersion string
 		vulnerableRanges []string
+		patchedVersions  []string
 		want             bool
 	}{
 		{
@@ -315,12 +316,23 @@ func TestScanner_IsVulnerable(t *testing.T) {
 			vulnerableRanges: []string{">= 0, < 3.1.4-r1"},
 			want:             true,
 		},
+		{
+			name:             "Fixed-version-first: installed equals patched, not vulnerable even if range would include it",
+			installedVersion: "7.81.0-1ubuntu1.15",
+			vulnerableRanges: []string{">= 0, < 7.81.0-1ubuntu1.16"},
+			patchedVersions:  []string{"7.81.0-1ubuntu1.15"},
+			want:             false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scanner := rapidfort.NewScanner(ftypes.Ubuntu)
-			result := scanner.IsVulnerable(t.Context(), tt.installedVersion, dbTypes.Advisory{VulnerableVersions: tt.vulnerableRanges})
+			adv := dbTypes.Advisory{
+				VulnerableVersions: tt.vulnerableRanges,
+				PatchedVersions:    tt.patchedVersions,
+			}
+			result := scanner.IsVulnerable(t.Context(), tt.installedVersion, adv)
 			assert.Equal(t, tt.want, result)
 		})
 	}

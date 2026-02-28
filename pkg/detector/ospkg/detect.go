@@ -100,8 +100,8 @@ func (d *Detector) Detect(ctx context.Context) ([]types.DetectedVulnerability, b
 	eosl := !d.driver.IsSupportedVersion(ctx, d.target.OS.Family, d.target.OS.Name)
 
 	pkgs := d.target.Packages
-	// Skip third-party filtering only when the driver explicitly opts in
-	// (e.g. RapidFort scanner which has its own advisories for all packages).
+
+	// Skip third-party filtering when the driver explicitly opts in
 	if tp, ok := d.driver.(driver.ThirdPartyAware); !ok || !tp.IncludesThirdParty() {
 		pkgs = filterPkgs(ctx, pkgs)
 	}

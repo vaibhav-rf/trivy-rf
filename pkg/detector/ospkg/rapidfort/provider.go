@@ -21,7 +21,7 @@ func Provider(osFamily ftypes.OSType, _ []ftypes.Package, labels map[string]stri
 		return nil
 	}
 	switch osFamily {
-	case ftypes.Ubuntu, ftypes.Alpine, ftypes.Debian:
+	case ftypes.Ubuntu, ftypes.Alpine:
 		return NewScanner(osFamily)
 	}
 	return nil

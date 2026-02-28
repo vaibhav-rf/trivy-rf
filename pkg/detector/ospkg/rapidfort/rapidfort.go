@@ -80,21 +80,8 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 			return nil, xerrors.Errorf("failed to get RapidFort advisories for %s: %w", srcName, err)
 		}
 
-		s.logger.DebugContext(ctx, "Package advisory lookup",
-			log.String("pkg", srcName),
-			log.String("platform", platformName),
-			log.String("installed", installedVer),
-			log.Int("advisories_found", len(advisories)))
-
 		for _, adv := range advisories {
 			vulnerable := s.isVulnerable(ctx, installedVer, adv)
-			s.logger.DebugContext(ctx, "Advisory check",
-				log.String("pkg", srcName),
-				log.String("cve", adv.VulnerabilityID),
-				log.String("installed", installedVer),
-				log.Any("vulnerable_ranges", adv.VulnerableVersions),
-				log.Any("fixed_versions", adv.PatchedVersions),
-				log.Bool("is_vulnerable", vulnerable))
 
 			if !vulnerable {
 				continue
@@ -112,21 +99,14 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 				DataSource:       adv.DataSource,
 			}
 
-			if adv.Severity != dbTypes.SeverityUnknown {
-				vuln.Vulnerability = dbTypes.Vulnerability{
-					Severity: adv.Severity.String(),
-				}
-				vuln.SeveritySource = adv.DataSource.ID
+		if adv.Severity != dbTypes.SeverityUnknown {
+			vuln.Vulnerability = dbTypes.Vulnerability{
+				Severity: adv.Severity.String(),
 			}
+			vuln.SeveritySource = adv.DataSource.ID
+		}
 
-			s.logger.DebugContext(ctx, "Vulnerability detected",
-				log.String("pkg", pkg.Name),
-				log.String("cve", adv.VulnerabilityID),
-				log.String("installed", vuln.InstalledVersion),
-				log.String("fixed", vuln.FixedVersion),
-				log.String("severity", vuln.Vulnerability.Severity))
-
-			vulns = append(vulns, vuln)
+		vulns = append(vulns, vuln)
 		}
 	}
 
@@ -138,10 +118,23 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 }
 
 func (s *Scanner) isVulnerable(ctx context.Context, installedVersion string, adv dbTypes.Advisory) bool {
+	if installedVersion == "" {
+		return false
+	}
+
+	// Check fixed versions first: if installed equals any patched version, not vulnerable.
+	for _, fixedVer := range adv.PatchedVersions {
+		if result, err := s.comparer.Compare(installedVersion, fixedVer); err == nil && result == 0 {
+			return false
+		}
+	}
+
+	// No vulnerable ranges means all versions are considered vulnerable.
 	if len(adv.VulnerableVersions) == 0 {
-		// No version constraints means all versions are considered vulnerable.
 		return true
 	}
+
+	// Check if installed version lies in any vulnerable range.
 	return s.checkConstraints(ctx, installedVersion, adv.VulnerableVersions)
 }
 
@@ -168,11 +161,6 @@ func (s *Scanner) checkConstraints(ctx context.Context, installedVersion string,
 				log.Err(err))
 			return false
 		}
-
-		s.logger.DebugContext(ctx, "Version constraint check",
-			log.String("installed", installedVersion),
-			log.String("constraint", constraintStr),
-			log.Bool("satisfied", satisfied))
 
 		if satisfied {
 			return true
