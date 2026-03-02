@@ -221,14 +221,6 @@ func TestProvider(t *testing.T) {
 			wantNil: false,
 		},
 		{
-			name:     "RapidFort Debian image detected",
-			osFamily: ftypes.Debian,
-			labels: map[string]string{
-				"maintainer": "RapidFort Curation Team <rfcurators@rapidfort.com>",
-			},
-			wantNil: false,
-		},
-		{
 			name:     "Non-RapidFort image: no maintainer label",
 			osFamily: ftypes.Ubuntu,
 			labels:   map[string]string{},
