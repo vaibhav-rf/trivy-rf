@@ -177,6 +177,263 @@ func TestScanner_Detect(t *testing.T) {
 			},
 			want: nil,
 		},
+		{
+			name:   "RedHat: vulnerable el9 curl (below el9 fix)",
+			baseOS: ftypes.RedHat,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "9.2", // trimmed to "9"
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.76.1-20.el9",
+						SrcName:    "curl",
+						SrcVersion: "7.76.1-20.el9",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2023-27536",
+					InstalledVersion: "7.76.1-20.el9",
+					FixedVersion:     "7.76.1-26.el9_3.3, 7.76.1-26.fc39",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2024-99999",
+					InstalledVersion: "7.76.1-20.el9",
+					FixedVersion:     "",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+			},
+		},
+		{
+			// CVE-2023-27536 is patched (installed == patched version).
+			// CVE-2024-99999 is an open/unfixed vulnerability and remains reported.
+			// CVE-2024-FC39-ONLY is fc39-only and must NOT appear for an el9 package.
+			name:   "RedHat: patched el9 curl (CVE-2023-27536 fixed, CVE-2024-99999 still open)",
+			baseOS: ftypes.RedHat,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "9",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.76.1-26.el9_3.3",
+						SrcName:    "curl",
+						SrcVersion: "7.76.1-26.el9_3.3",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2024-99999",
+					InstalledVersion: "7.76.1-26.el9_3.3",
+					FixedVersion:     "",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+			},
+		},
+		{
+			// CVE-2024-FC39-ONLY has only an fc39 range; an el9 package must not be flagged
+			// even though the version satisfies the fc39 range numerically under RPM ordering.
+			name:   "RedHat: el9 curl not affected by fc39-only advisory (identifier filtering)",
+			baseOS: ftypes.RedHat,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "9",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.76.1-20.el9",
+						SrcName:    "curl",
+						SrcVersion: "7.76.1-20.el9",
+					},
+				},
+			},
+			// CVE-2023-27536 and CVE-2024-99999 appear (el9 ranges match).
+			// CVE-2024-FC39-ONLY must NOT appear (fc39 identifier filtered out).
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2023-27536",
+					InstalledVersion: "7.76.1-20.el9",
+					FixedVersion:     "7.76.1-26.el9_3.3, 7.76.1-26.fc39",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2024-99999",
+					InstalledVersion: "7.76.1-20.el9",
+					FixedVersion:     "",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+			},
+		},
+		{
+			name:   "RedHat: rf- package name stripped, el9 version identified",
+			baseOS: ftypes.RedHat,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "9",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "rf-curl",
+						Version:    "7.76.1-20.el9",
+						SrcName:    "rf-curl",
+						SrcVersion: "7.76.1-20.el9",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "rf-curl",
+					VulnerabilityID:  "CVE-2023-27536",
+					InstalledVersion: "7.76.1-20.el9",
+					FixedVersion:     "7.76.1-26.el9_3.3, 7.76.1-26.fc39, 7.76.1-26.rf1",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+				{
+					PkgName:          "rf-curl",
+					VulnerabilityID:  "CVE-2024-99999",
+					InstalledVersion: "7.76.1-20.el9",
+					FixedVersion:     "",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+			},
+		},
+		{
+			name:   "RedHat: rf package with bare .rf suffix uses 'rf' identifier",
+			baseOS: ftypes.RedHat,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "9",
+				pkgs: []ftypes.Package{
+					{
+						// Version has no el/fc tag; uses "rf" identifier to match rf-tagged ranges.
+						Name:       "rf-curl",
+						Version:    "7.76.1-20.rf1",
+						SrcName:    "rf-curl",
+						SrcVersion: "7.76.1-20.rf1",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "rf-curl",
+					VulnerabilityID:  "CVE-2023-27536",
+					InstalledVersion: "7.76.1-20.rf1",
+					FixedVersion:     "7.76.1-26.el9_3.3, 7.76.1-26.fc39, 7.76.1-26.rf1",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+				{
+					PkgName:          "rf-curl",
+					VulnerabilityID:  "CVE-2024-99999",
+					InstalledVersion: "7.76.1-20.rf1",
+					FixedVersion:     "",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -235,12 +492,12 @@ func TestProvider(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:     "Unsupported OS family: RapidFort label but RHEL",
+			name:     "RapidFort RedHat image detected",
 			osFamily: ftypes.RedHat,
 			labels: map[string]string{
 				"maintainer": "RapidFort Curation Team <rfcurators@rapidfort.com>",
 			},
-			wantNil: true,
+			wantNil: false,
 		},
 		{
 			name:     "Case-insensitive detection",
@@ -267,64 +524,221 @@ func TestProvider(t *testing.T) {
 func TestScanner_IsVulnerable(t *testing.T) {
 	tests := []struct {
 		name             string
+		baseOS           ftypes.OSType
 		installedVersion string
+		identifier       string
+		isRFPackage      bool
 		vulnerableRanges []string
 		patchedVersions  []string
+		custom           any
 		want             bool
 	}{
+		// ── Ubuntu / Alpine (no identifier) ─────────────────────────────────────
 		{
 			name:             "No version constraint: always vulnerable",
+			baseOS:           ftypes.Ubuntu,
 			installedVersion: "7.81.0-1ubuntu1.13",
 			vulnerableRanges: []string{},
 			want:             true,
 		},
 		{
 			name:             "Vulnerable: below fix (introduced=0 format from pipeline)",
+			baseOS:           ftypes.Ubuntu,
 			installedVersion: "7.81.0-1ubuntu1.13",
 			vulnerableRanges: []string{">= 0, < 7.81.0-1ubuntu1.15"},
 			want:             true,
 		},
 		{
 			name:             "Patched: at fix version",
+			baseOS:           ftypes.Ubuntu,
 			installedVersion: "7.81.0-1ubuntu1.15",
 			vulnerableRanges: []string{">= 0, < 7.81.0-1ubuntu1.15"},
 			want:             false,
 		},
 		{
 			name:             "Patched: above fix version",
+			baseOS:           ftypes.Ubuntu,
 			installedVersion: "7.81.0-1ubuntu1.16",
 			vulnerableRanges: []string{">= 0, < 7.81.0-1ubuntu1.15"},
 			want:             false,
 		},
 		{
 			name:             "Range constraint: specific introduced version",
+			baseOS:           ftypes.Ubuntu,
 			installedVersion: "7.81.0-1ubuntu1.13",
 			vulnerableRanges: []string{">= 7.0.0, < 7.81.0-1ubuntu1.15"},
 			want:             true,
 		},
 		{
 			name:             "Alpine: APK version comparison",
+			baseOS:           ftypes.Alpine,
 			installedVersion: "3.1.3-r0",
 			vulnerableRanges: []string{">= 0, < 3.1.4-r1"},
 			want:             true,
 		},
 		{
 			name:             "Fixed-version-first: installed equals patched, not vulnerable even if range would include it",
+			baseOS:           ftypes.Ubuntu,
 			installedVersion: "7.81.0-1ubuntu1.15",
 			vulnerableRanges: []string{">= 0, < 7.81.0-1ubuntu1.16"},
 			patchedVersions:  []string{"7.81.0-1ubuntu1.15"},
+			want:             false,
+		},
+		// ── RedHat: identifier-based filtering ──────────────────────────────────
+		{
+			name:             "RPM el9: vulnerable — el9 range matches installed identifier",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "7.76.1-20.el9",
+			identifier:       "el9",
+			vulnerableRanges: []string{
+				">= 7.76.1-14.el9, < 7.76.1-26.el9_3.3",
+				">= 7.76.1-14.fc39, < 7.76.1-26.fc39",
+			},
+			custom: map[string]any{"identifiers": []any{"el9", "fc39"}},
+			want:   true,
+		},
+		{
+			name:             "RPM el9: not vulnerable — fc39 range skipped, el9 range not satisfied",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "7.76.1-26.el9_3.3",
+			identifier:       "el9",
+			vulnerableRanges: []string{
+				">= 7.76.1-14.el9, < 7.76.1-26.el9_3.3",
+				">= 7.76.1-14.fc39, < 7.76.1-26.fc39",
+			},
+			patchedVersions: []string{"7.76.1-26.el9_3.3", "7.76.1-26.fc39"},
+			custom:          map[string]any{"identifiers": []any{"el9", "fc39"}},
+			want:            false,
+		},
+		{
+			name:             "RPM el9: fc39 range must not cause false positive for el9 package",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "7.76.1-20.el9",
+			identifier:       "el9",
+			// Only fc39 ranges present — el9 package must not be flagged.
+			vulnerableRanges: []string{">= 7.76.1-14.fc39, < 7.76.1-26.fc39"},
+			custom:           map[string]any{"identifiers": []any{"fc39"}},
+			want:             false,
+		},
+		{
+			name:             "RPM fc39: vulnerable — fc39 range matches installed identifier",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "7.76.1-20.fc39",
+			identifier:       "fc39",
+			vulnerableRanges: []string{
+				">= 7.76.1-14.el9, < 7.76.1-26.el9_3.3",
+				">= 7.76.1-14.fc39, < 7.76.1-26.fc39",
+			},
+			custom: map[string]any{"identifiers": []any{"el9", "fc39"}},
+			want:   true,
+		},
+		{
+			// No identifier in version → defaults to "el".
+			// "el" prefix-matches "el9", so the el9 advisory range is checked.
+			name:             "RPM: no identifier — defaults to 'el', matches el9 advisory range",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "7.76.1-20.rf1",
+			identifier:       "",
+			vulnerableRanges: []string{">= 7.76.1-14.el9, < 7.76.1-26.el9_3.3"},
+			custom:           map[string]any{"identifiers": []any{"el9"}},
+			want:             true,
+		},
+		{
+			// No identifier → defaults to "el". Must NOT match an fc-only advisory range.
+			name:             "RPM: no identifier — defaults to 'el', fc39 range must be skipped",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "7.76.1-20.rf1",
+			identifier:       "",
+			vulnerableRanges: []string{">= 7.76.1-14.fc39, < 7.76.1-26.fc39"},
+			custom:           map[string]any{"identifiers": []any{"fc39"}},
+			want:             false,
+		},
+		{
+			name:             "RPM: open-ended vulnerability (no fix) with el9 identifier",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "7.76.1-20.el9",
+			identifier:       "el9",
+			vulnerableRanges: []string{">=7.76.1-14.el9"},
+			custom:           map[string]any{"identifiers": []any{"el9"}},
+			want:             true,
+		},
+		// ── RedHat: "rf" identifier (.rf suffix versions) ───────────────────────
+		{
+			name:             "RPM rf: .rf version matches 'rf' advisory range",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "7.76.1-20.rf1",
+			identifier:       "rf",
+			vulnerableRanges: []string{
+				">= 7.76.1-14.el9, < 7.76.1-26.el9_3.3",
+				">= 7.76.1-14.fc39, < 7.76.1-26.fc39",
+				">= 7.76.1-14.rf, < 7.76.1-26.rf1",
+			},
+			custom: map[string]any{"identifiers": []any{"el9", "fc39", "rf"}},
+			want:   true,
+		},
+		{
+			name:             "RPM rf: .rf version must not match el9/fc39-only ranges",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "7.76.1-20.rf1",
+			identifier:       "rf",
+			vulnerableRanges: []string{
+				">= 7.76.1-14.el9, < 7.76.1-26.el9_3.3",
+				">= 7.76.1-14.fc39, < 7.76.1-26.fc39",
+			},
+			custom: map[string]any{"identifiers": []any{"el9", "fc39"}},
+			want:   false,
+		},
+		// ── RedHat: rf- package fallback ─────────────────────────────────────────
+		{
+			// rf- package with fc43 version; advisory has only "rf" ranges.
+			// No primary identifier match → fallback includes "rf" range.
+			name:             "RPM rf- fallback: fc43 package matches 'rf' range when no fc43 range exists",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "2.7.3-1.fc43",
+			identifier:       "fc43",
+			isRFPackage:      true,
+			vulnerableRanges: []string{">= 2.7.0-1.rf, < 2.7.4-1.rf1"},
+			custom:           map[string]any{"identifiers": []any{"rf"}},
+			want:             true,
+		},
+		{
+			// rf- package with fc43 version; advisory has fc43 range → primary match,
+			// fallback must not fire.
+			name:             "RPM rf- fallback: fc43 range present, primary match used — no fallback",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "2.7.3-1.fc43",
+			identifier:       "fc43",
+			isRFPackage:      true,
+			vulnerableRanges: []string{
+				">= 2.7.0-1.fc43, < 2.7.4-1.fc43",
+				">= 2.7.0-1.rf, < 2.7.4-1.rf1",
+			},
+			custom: map[string]any{"identifiers": []any{"fc43", "rf"}},
+			want:   true,
+		},
+		{
+			// Non-rf package with fc43 version; advisory has only "rf" ranges.
+			// Fallback must NOT fire for non-rf packages.
+			name:             "RPM rf- fallback: non-rf package must not match 'rf'-only range",
+			baseOS:           ftypes.RedHat,
+			installedVersion: "2.7.3-1.fc43",
+			identifier:       "fc43",
+			isRFPackage:      false,
+			vulnerableRanges: []string{">= 2.7.0-1.rf, < 2.7.4-1.rf1"},
+			custom:           map[string]any{"identifiers": []any{"rf"}},
 			want:             false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scanner := rapidfort.NewScanner(ftypes.Ubuntu)
+			scanner := rapidfort.NewScanner(tt.baseOS)
 			adv := dbTypes.Advisory{
 				VulnerableVersions: tt.vulnerableRanges,
 				PatchedVersions:    tt.patchedVersions,
+				Custom:             tt.custom,
 			}
-			result := scanner.IsVulnerable(t.Context(), tt.installedVersion, adv)
+			result := scanner.IsVulnerable(t.Context(), tt.installedVersion, tt.identifier, tt.isRFPackage, adv)
 			assert.Equal(t, tt.want, result)
 		})
 	}
