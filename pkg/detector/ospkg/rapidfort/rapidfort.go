@@ -3,6 +3,7 @@ package rapidfort
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"golang.org/x/xerrors"
@@ -15,6 +16,25 @@ import (
 	"github.com/aquasecurity/trivy/pkg/scan/utils"
 	"github.com/aquasecurity/trivy/pkg/types"
 )
+
+// rpmIdentifierRe extracts the first el/fc distro identifier from an RPM version string.
+// Examples: "7.76.1-26.el9_3.3" → "el9", "7.76.1-26.fc43" → "fc43".
+var rpmIdentifierRe = regexp.MustCompile(`\b((?:el|fc)\d+)`)
+
+// rfVersionSuffixRe matches RPM version strings that end with RapidFort's .rf or .rfN suffix
+// (e.g. "7.76.1-26.rf1", "7.76.1-26.rf").  These are RHEL-based packages so the distro
+// identifier must be derived from the OS version rather than the version string itself.
+var rfVersionSuffixRe = regexp.MustCompile(`\.rf\d*$`)
+
+// extractRPMIdentifier returns the first el/fc identifier embedded in an RPM version string.
+// Returns "" when no identifier is present (ubuntu/alpine versions, bare .rf versions).
+func extractRPMIdentifier(ver string) string {
+	m := rpmIdentifierRe.FindStringSubmatch(ver)
+	if len(m) >= 2 {
+		return m[1]
+	}
+	return ""
+}
 
 // platformFormat matches the format used in trivy-db's rapidfort vulnsrc:
 // "rapidfort {baseOS} {version}"  e.g. "rapidfort ubuntu 22.04"
@@ -45,6 +65,9 @@ func NewScanner(baseOS ftypes.OSType) *Scanner {
 	case ftypes.Alpine:
 		comparer = version.NewAPKComparer()
 		versionTrimmer = version.Minor // "3.17.2" → "3.17"
+	case ftypes.RedHat:
+		comparer = version.NewRPMComparer()
+		versionTrimmer = version.Major // "9.2" → "9"
 	default:
 		comparer = version.NewDEBComparer()
 		versionTrimmer = version.Minor
@@ -73,7 +96,24 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 		if srcName == "" {
 			srcName = pkg.Name
 		}
+
 		installedVer := utils.FormatSrcVersion(pkg)
+
+		// Compute the distro identifier for RedHat advisory range filtering.
+		//   - Standard el/fc packages: identifier embedded in version string
+		//     (e.g. "7.76.1-26.el9_3.3" → "el9", "7.76.1-26.fc43" → "fc43").
+		//   - RapidFort rf packages with a bare .rf/.rfN suffix carry no el/fc tag;
+		//     use the "rf" identifier to match advisory ranges tagged for RapidFort builds.
+		//   - Non-RPM packages (ubuntu, alpine): identifier is always "".
+		identifier := extractRPMIdentifier(installedVer)
+		if identifier == "" && s.baseOS == "redhat" && rfVersionSuffixRe.MatchString(installedVer) {
+			identifier = "rf"
+		}
+
+		// isRFPackage is true when the package name carries the RapidFort "rf-" prefix
+		// (e.g. "rf-curl"). Used as a fallback in isRPMVulnerable: if no advisory range
+		// matches the primary identifier, ranges tagged "rf" are also considered.
+		isRFPackage := strings.HasPrefix(pkg.Name, "rf-")
 
 		advisories, err := s.dbc.GetAdvisories(platformName, srcName)
 		if err != nil {
@@ -81,7 +121,7 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 		}
 
 		for _, adv := range advisories {
-			vulnerable := s.isVulnerable(ctx, installedVer, adv)
+			vulnerable := s.isVulnerable(ctx, installedVer, identifier, isRFPackage, adv)
 
 			if !vulnerable {
 				continue
@@ -95,18 +135,17 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 				FixedVersion:     strings.Join(adv.PatchedVersions, ", "),
 				Layer:            pkg.Layer,
 				PkgIdentifier:    pkg.Identifier,
-				Custom:           adv.Custom,
 				DataSource:       adv.DataSource,
 			}
 
-		if adv.Severity != dbTypes.SeverityUnknown {
-			vuln.Vulnerability = dbTypes.Vulnerability{
-				Severity: adv.Severity.String(),
+			if adv.Severity != dbTypes.SeverityUnknown {
+				vuln.Vulnerability = dbTypes.Vulnerability{
+					Severity: adv.Severity.String(),
+				}
+				vuln.SeveritySource = adv.DataSource.ID
 			}
-			vuln.SeveritySource = adv.DataSource.ID
-		}
 
-		vulns = append(vulns, vuln)
+			vulns = append(vulns, vuln)
 		}
 	}
 
@@ -117,7 +156,7 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 	return vulns, nil
 }
 
-func (s *Scanner) isVulnerable(ctx context.Context, installedVersion string, adv dbTypes.Advisory) bool {
+func (s *Scanner) isVulnerable(ctx context.Context, installedVersion, identifier string, isRFPackage bool, adv dbTypes.Advisory) bool {
 	if installedVersion == "" {
 		return false
 	}
@@ -134,8 +173,103 @@ func (s *Scanner) isVulnerable(ctx context.Context, installedVersion string, adv
 		return true
 	}
 
+	// For RedHat/Fedora packages, use identifier-aware RPM vulnerability check to avoid
+	// false positives from cross-distro RPM version ordering (e.g. el9 vs fc39 ranges).
+	if s.baseOS == "redhat" {
+		return s.isRPMVulnerable(ctx, installedVersion, identifier, isRFPackage, adv)
+	}
+
 	// Check if installed version lies in any vulnerable range.
 	return s.checkConstraints(ctx, installedVersion, adv.VulnerableVersions)
+}
+
+// parseCustomIdentifiers extracts the ordered identifier list from Advisory.Custom.
+// identifiers[i] corresponds to VulnerableVersions[i] in the advisory.
+// Returns nil when the field is absent or malformed.
+func parseCustomIdentifiers(custom any) []string {
+	m, ok := custom.(map[string]any)
+	if !ok {
+		return nil
+	}
+	raw, ok := m["identifiers"]
+	if !ok {
+		return nil
+	}
+	ids, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if s, ok := id.(string); ok {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// isRPMVulnerable checks whether an RPM package is vulnerable by filtering advisory
+// version ranges against the package's distro identifier (e.g. "el9", "fc43").
+// Without this filtering, cross-distro ranges (el9 vs fc39) can produce false positives
+// because RPM version ordering compares release strings without regard to the distro tag.
+//
+// Each range is matched using Advisory.Custom.identifiers[i], where identifiers[i]
+// explicitly names the distro for VulnerableVersions[i]. Falls back to extracting the
+// identifier via regex from the constraint string when no Custom identifier is present.
+func (s *Scanner) isRPMVulnerable(ctx context.Context, installedVersion, identifier string, isRFPackage bool, adv dbTypes.Advisory) bool {
+	// When no identifier could be extracted from the package version string, default to
+	// the "el" family so that we still match el9/el8/… advisory ranges rather than
+	// skipping them.
+	if identifier == "" {
+		identifier = "el"
+	}
+
+	// Build a filtered slice of constraints that match the installed package's identifier.
+	// Prefer Custom.identifiers[i] for explicit index-based matching; fall back to
+	// regex extraction from the constraint string when no Custom identifier is available.
+	// Prefix matching: "el" matches "el9", "el8", …; "el9" matches "el9" and "el9_3".
+	// Constraints with no identifier are always included (universal ranges).
+	customIdentifiers := parseCustomIdentifiers(adv.Custom)
+
+	// isRFRange reports whether the range at index i is tagged for RapidFort builds.
+	// With explicit Custom.identifiers: checks identifiers[i] == "rf".
+	// Without: falls back to checking whether the constraint string itself contains
+	// a .rf/.rfN version suffix.
+	isRFRange := func(i int, constraintStr string) bool {
+		if i < len(customIdentifiers) {
+			return customIdentifiers[i] == "rf"
+		}
+		return rfVersionSuffixRe.MatchString(constraintStr)
+	}
+
+	var matchingRanges []string
+	for i, constraintStr := range adv.VulnerableVersions {
+		if i < len(customIdentifiers) {
+			if !strings.HasPrefix(customIdentifiers[i], identifier) {
+				continue // skip ranges belonging to a different distro identifier
+			}
+		} else {
+			advIdentifier := extractRPMIdentifier(constraintStr)
+			if advIdentifier != "" && !strings.HasPrefix(advIdentifier, identifier) {
+				continue // skip ranges belonging to a different distro identifier
+			}
+		}
+		matchingRanges = append(matchingRanges, constraintStr)
+	}
+
+	// Fallback for rf- prefixed packages: if no range matched the primary identifier
+	// (e.g. package has an fc43 version but the advisory only has "rf" ranges), include
+	// advisory ranges tagged for RapidFort builds. This handles cases where the installed
+	// version doesn't carry a standard el/fc tag due to inconsistent build versioning.
+	if isRFPackage && len(matchingRanges) == 0 {
+		for i, constraintStr := range adv.VulnerableVersions {
+			if isRFRange(i, constraintStr) {
+				matchingRanges = append(matchingRanges, constraintStr)
+			}
+		}
+	}
+
+	return s.checkConstraints(ctx, installedVersion, matchingRanges)
 }
 
 func (s *Scanner) checkConstraints(ctx context.Context, installedVersion string, constraintsStr []string) bool {
