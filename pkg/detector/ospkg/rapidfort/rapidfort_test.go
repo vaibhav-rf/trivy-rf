@@ -480,7 +480,7 @@ func TestProvider(t *testing.T) {
 		{
 			name:     "Non-RapidFort image: no maintainer label",
 			osFamily: ftypes.Ubuntu,
-			labels:   map[string]string{},
+			labels:   make(map[string]string),
 			wantNil:  true,
 		},
 		{
