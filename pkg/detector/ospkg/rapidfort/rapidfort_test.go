@@ -569,6 +569,152 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
+			name:   "Debian: vulnerable curl, installed version is below fix",
+			baseOS: ftypes.Debian,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "12",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.88.1-10+deb12u3",
+						SrcName:    "curl",
+						SrcVersion: "7.88.1-10+deb12u3",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2023-38545",
+					InstalledVersion: "7.88.1-10+deb12u3",
+					FixedVersion:     "7.88.1-10+deb12u5",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "debian",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2023-38039",
+					InstalledVersion: "7.88.1-10+deb12u3",
+					FixedVersion:     "7.88.1-10+deb12u4",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "debian",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+			},
+		},
+		{
+			name:   "Debian: patched curl, installed version is at fix",
+			baseOS: ftypes.Debian,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "12",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.88.1-10+deb12u5",
+						SrcName:    "curl",
+						SrcVersion: "7.88.1-10+deb12u5",
+					},
+				},
+			},
+			want: nil,
+		},
+		{
+			name:   "Debian: OS version with patch trimmed to major",
+			baseOS: ftypes.Debian,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "12.5", // trimmed to "12"
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.88.1-10+deb12u3",
+						SrcName:    "curl",
+						SrcVersion: "7.88.1-10+deb12u3",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2023-38545",
+					InstalledVersion: "7.88.1-10+deb12u3",
+					FixedVersion:     "7.88.1-10+deb12u5",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "debian",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2023-38039",
+					InstalledVersion: "7.88.1-10+deb12u3",
+					FixedVersion:     "7.88.1-10+deb12u4",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "debian",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+			},
+		},
+		{
+			name:   "Debian: package not in DB returns empty",
+			baseOS: ftypes.Debian,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "11", // no Debian 11 entries in fixtures
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.74.0-1.3+deb11u3",
+						SrcName:    "curl",
+						SrcVersion: "7.74.0-1.3+deb11u3",
+					},
+				},
+			},
+			want: nil,
+		},
+		{
 			// SrcName empty → falls back to pkg.Name internally (existing behavior).
 			// pkg.Name == derived srcName so the binary-name fallback must NOT
 			// fire — CVE-2025-0977 (only in the rust-rpm-sequoia bucket) must
@@ -691,10 +837,18 @@ func TestProvider(t *testing.T) {
 			wantNil: false,
 		},
 		{
+			name:     "RapidFort Debian image detected",
+			osFamily: ftypes.Debian,
+			labels: map[string]string{
+				"maintainer": "RapidFort Curation Team <rfcurators@rapidfort.com>",
+			},
+			wantNil: false,
+		},
+		{
 			name:     "Case-insensitive detection",
 			osFamily: ftypes.Ubuntu,
 			labels: map[string]string{
-				"maintainer": "RAPIDFORT curation team",
+				"maintainer": "RapidFort Curation Team <rfcurators@rapidfort.com>",
 			},
 			wantNil: false,
 		},
