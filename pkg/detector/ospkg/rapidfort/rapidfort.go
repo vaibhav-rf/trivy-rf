@@ -36,6 +36,14 @@ func extractRPMIdentifier(ver string) string {
 	return ""
 }
 
+// isRPMBased reports whether the scanner's base OS uses RPM packaging and therefore
+// requires identifier-aware vulnerability filtering (el9 vs fc39, etc.).
+// Oracle Linux is binary-compatible with RHEL and uses el<N> tags, so it follows the
+// same RPM advisory matching rules.
+func (s *Scanner) isRPMBased() bool {
+	return s.baseOS == "redhat" || s.baseOS == "oracle"
+}
+
 // platformFormat matches the format used in trivy-db's rapidfort vulnsrc:
 // "rapidfort {baseOS} {version}"  e.g. "rapidfort ubuntu 22.04"
 const platformFormat = "rapidfort %s %s"
@@ -68,6 +76,9 @@ func NewScanner(baseOS ftypes.OSType) *Scanner {
 	case ftypes.RedHat:
 		comparer = version.NewRPMComparer()
 		versionTrimmer = version.Major // "9.2" → "9"
+	case ftypes.Oracle:
+		comparer = version.NewRPMComparer()
+		versionTrimmer = version.Major // "8.9" → "8"
 	default:
 		comparer = version.NewDEBComparer()
 		versionTrimmer = version.Minor
@@ -99,14 +110,16 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 
 		installedVer := utils.FormatSrcVersion(pkg)
 
-		// Compute the distro identifier for RedHat advisory range filtering.
+		// Compute the distro identifier for RedHat/Oracle advisory range filtering.
 		//   - Standard el/fc packages: identifier embedded in version string
 		//     (e.g. "7.76.1-26.el9_3.3" → "el9", "7.76.1-26.fc43" → "fc43").
+		//   - Oracle Linux packages are RHEL-rebuilt and carry el<N> tags (with the
+		//     occasional ".0.N" Oracle suffix), so the same regex applies.
 		//   - RapidFort rf packages with a bare .rf/.rfN suffix carry no el/fc tag;
 		//     use the "rf" identifier to match advisory ranges tagged for RapidFort builds.
 		//   - Non-RPM packages (ubuntu, alpine): identifier is always "".
 		identifier := extractRPMIdentifier(installedVer)
-		if identifier == "" && s.baseOS == "redhat" && rfVersionSuffixRe.MatchString(installedVer) {
+		if identifier == "" && s.isRPMBased() && rfVersionSuffixRe.MatchString(installedVer) {
 			identifier = "rf"
 		}
 
@@ -194,9 +207,9 @@ func (s *Scanner) isVulnerable(ctx context.Context, installedVersion, identifier
 		return true
 	}
 
-	// For RedHat/Fedora packages, use identifier-aware RPM vulnerability check to avoid
+	// For RedHat/Fedora/Oracle packages, use identifier-aware RPM vulnerability check to avoid
 	// false positives from cross-distro RPM version ordering (e.g. el9 vs fc39 ranges).
-	if s.baseOS == "redhat" {
+	if s.isRPMBased() {
 		return s.isRPMVulnerable(ctx, installedVersion, identifier, isRFPackage, adv)
 	}
 

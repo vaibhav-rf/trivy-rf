@@ -715,6 +715,263 @@ func TestScanner_Detect(t *testing.T) {
 			want: nil,
 		},
 		{
+			name:   "Oracle: vulnerable el8 curl (below el8 fix)",
+			baseOS: ftypes.Oracle,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "8.9", // trimmed to "8"
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.61.1-20.el8",
+						SrcName:    "curl",
+						SrcVersion: "7.61.1-20.el8",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2023-27536",
+					InstalledVersion: "7.61.1-20.el8",
+					FixedVersion:     "7.61.1-26.el8_8.2, 7.76.1-26.fc39",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "oracle",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2024-88888",
+					InstalledVersion: "7.61.1-20.el8",
+					FixedVersion:     "",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "oracle",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+			},
+		},
+		{
+			// CVE-2023-27536 is patched (installed == patched version).
+			// CVE-2024-88888 is an open/unfixed vulnerability and remains reported.
+			// CVE-2024-FC39-ONLY is fc39-only and must NOT appear for an el8 package.
+			name:   "Oracle: patched el8 curl (CVE-2023-27536 fixed, CVE-2024-88888 still open)",
+			baseOS: ftypes.Oracle,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "8",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.61.1-26.el8_8.2",
+						SrcName:    "curl",
+						SrcVersion: "7.61.1-26.el8_8.2",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2024-88888",
+					InstalledVersion: "7.61.1-26.el8_8.2",
+					FixedVersion:     "",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "oracle",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+			},
+		},
+		{
+			// CVE-2024-FC39-ONLY has only an fc39 range; an el8 Oracle package must not be
+			// flagged even though the version satisfies the fc39 range numerically under RPM ordering.
+			name:   "Oracle: el8 curl not affected by fc39-only advisory (identifier filtering)",
+			baseOS: ftypes.Oracle,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "8",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.61.1-20.el8",
+						SrcName:    "curl",
+						SrcVersion: "7.61.1-20.el8",
+					},
+				},
+			},
+			// CVE-2023-27536 and CVE-2024-88888 appear (el8 ranges match).
+			// CVE-2024-FC39-ONLY must NOT appear (fc39 identifier filtered out).
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2023-27536",
+					InstalledVersion: "7.61.1-20.el8",
+					FixedVersion:     "7.61.1-26.el8_8.2, 7.76.1-26.fc39",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "oracle",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2024-88888",
+					InstalledVersion: "7.61.1-20.el8",
+					FixedVersion:     "",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "oracle",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+			},
+		},
+		{
+			name:   "Oracle: rf- package name stripped, el8 version identified",
+			baseOS: ftypes.Oracle,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "8",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "rf-curl",
+						Version:    "7.61.1-20.el8",
+						SrcName:    "rf-curl",
+						SrcVersion: "7.61.1-20.el8",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "rf-curl",
+					VulnerabilityID:  "CVE-2023-27536",
+					InstalledVersion: "7.61.1-20.el8",
+					FixedVersion:     "7.61.1-26.el8_8.2, 7.76.1-26.fc39, 7.61.1-26.rf1",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "oracle",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+				{
+					PkgName:          "rf-curl",
+					VulnerabilityID:  "CVE-2024-88888",
+					InstalledVersion: "7.61.1-20.el8",
+					FixedVersion:     "",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "oracle",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+			},
+		},
+		{
+			name:   "Oracle: rf package with bare .rf suffix uses 'rf' identifier",
+			baseOS: ftypes.Oracle,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "8",
+				pkgs: []ftypes.Package{
+					{
+						// Version has no el/fc tag; uses "rf" identifier to match rf-tagged ranges.
+						Name:       "rf-curl",
+						Version:    "7.61.1-20.rf1",
+						SrcName:    "rf-curl",
+						SrcVersion: "7.61.1-20.rf1",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "rf-curl",
+					VulnerabilityID:  "CVE-2023-27536",
+					InstalledVersion: "7.61.1-20.rf1",
+					FixedVersion:     "7.61.1-26.el8_8.2, 7.76.1-26.fc39, 7.61.1-26.rf1",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "oracle",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+				{
+					PkgName:          "rf-curl",
+					VulnerabilityID:  "CVE-2024-88888",
+					InstalledVersion: "7.61.1-20.rf1",
+					FixedVersion:     "",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "oracle",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityHigh.String(),
+					},
+				},
+			},
+		},
+		{
 			// SrcName empty → falls back to pkg.Name internally (existing behavior).
 			// pkg.Name == derived srcName so the binary-name fallback must NOT
 			// fire — CVE-2025-0977 (only in the rust-rpm-sequoia bucket) must
@@ -845,10 +1102,18 @@ func TestProvider(t *testing.T) {
 			wantNil: false,
 		},
 		{
+			name:     "RapidFort Oracle image detected",
+			osFamily: ftypes.Oracle,
+			labels: map[string]string{
+				"maintainer": "RapidFort Curation Team <rfcurators@rapidfort.com>",
+			},
+			wantNil: false,
+		},
+		{
 			name:     "Case-insensitive detection",
 			osFamily: ftypes.Ubuntu,
 			labels: map[string]string{
-				"maintainer": "RapidFort Curation Team <rfcurators@rapidfort.com>",
+				"maintainer": "RAPIDFORT curation team",
 			},
 			wantNil: false,
 		},
@@ -1072,6 +1337,54 @@ func TestScanner_IsVulnerable(t *testing.T) {
 			vulnerableRanges: []string{">= 2.7.0-1.rf, < 2.7.4-1.rf1"},
 			custom:           map[string]any{"identifiers": []any{"rf"}},
 			want:             false,
+		},
+		// ── Oracle: identifier-based filtering (mirrors RedHat path) ────────────
+		{
+			name:             "Oracle el8: vulnerable — el8 range matches installed identifier",
+			baseOS:           ftypes.Oracle,
+			installedVersion: "7.61.1-20.el8",
+			identifier:       "el8",
+			vulnerableRanges: []string{
+				">= 7.61.1-14.el8, < 7.61.1-26.el8_8.2",
+				">= 7.76.1-14.fc39, < 7.76.1-26.fc39",
+			},
+			custom: map[string]any{"identifiers": []any{"el8", "fc39"}},
+			want:   true,
+		},
+		{
+			name:             "Oracle el8: not vulnerable — fc39 range skipped, el8 range not satisfied",
+			baseOS:           ftypes.Oracle,
+			installedVersion: "7.61.1-26.el8_8.2",
+			identifier:       "el8",
+			vulnerableRanges: []string{
+				">= 7.61.1-14.el8, < 7.61.1-26.el8_8.2",
+				">= 7.76.1-14.fc39, < 7.76.1-26.fc39",
+			},
+			patchedVersions: []string{"7.61.1-26.el8_8.2", "7.76.1-26.fc39"},
+			custom:          map[string]any{"identifiers": []any{"el8", "fc39"}},
+			want:            false,
+		},
+		{
+			name:             "Oracle el8: fc39 range must not cause false positive for el8 package",
+			baseOS:           ftypes.Oracle,
+			installedVersion: "7.61.1-20.el8",
+			identifier:       "el8",
+			// Only fc39 ranges present — el8 Oracle package must not be flagged.
+			vulnerableRanges: []string{">= 7.76.1-14.fc39, < 7.76.1-26.fc39"},
+			custom:           map[string]any{"identifiers": []any{"fc39"}},
+			want:             false,
+		},
+		{
+			name:             "Oracle: rf- package with bare .rf suffix matches 'rf' range",
+			baseOS:           ftypes.Oracle,
+			installedVersion: "7.61.1-20.rf1",
+			identifier:       "rf",
+			vulnerableRanges: []string{
+				">= 7.61.1-14.el8, < 7.61.1-26.el8_8.2",
+				">= 7.61.1-14.rf, < 7.61.1-26.rf1",
+			},
+			custom: map[string]any{"identifiers": []any{"el8", "rf"}},
+			want:   true,
 		},
 	}
 

@@ -190,3 +190,78 @@
             Custom:
               identifiers:
                 - "fc39"
+- bucket: rapidfort oracle 8
+  pairs:
+    - bucket: rf-curl
+      pairs:
+        - key: CVE-2023-27536
+          value:
+            VulnerableVersions:
+              - ">= 7.61.1-14.el8, < 7.61.1-26.el8_8.2"
+              - ">= 7.76.1-14.fc39, < 7.76.1-26.fc39"
+              - ">= 7.61.1-14.rf, < 7.61.1-26.rf1"
+            PatchedVersions:
+              - "7.61.1-26.el8_8.2"
+              - "7.76.1-26.fc39"
+              - "7.61.1-26.rf1"
+            Severity: 2
+            Custom:
+              identifiers:
+                - "el8"
+                - "fc39"
+                - "rf"
+        - key: CVE-2024-88888
+          value:
+            VulnerableVersions:
+              - ">=7.61.1-14.el8"
+              - ">=7.61.1-14.rf"
+            PatchedVersions: []
+            Severity: 3
+            Custom:
+              identifiers:
+                - "el8"
+                - "rf"
+        - key: CVE-2024-FC39-ONLY
+          value:
+            VulnerableVersions:
+              - ">= 7.76.1-14.fc39, < 7.76.1-26.fc39"
+            PatchedVersions:
+              - "7.76.1-26.fc39"
+            Severity: 2
+            Custom:
+              identifiers:
+                - "fc39"
+    - bucket: curl
+      pairs:
+        - key: CVE-2023-27536
+          value:
+            VulnerableVersions:
+              - ">= 7.61.1-14.el8, < 7.61.1-26.el8_8.2"
+              - ">= 7.76.1-14.fc39, < 7.76.1-26.fc39"
+            PatchedVersions:
+              - "7.61.1-26.el8_8.2"
+              - "7.76.1-26.fc39"
+            Severity: 2
+            Custom:
+              identifiers:
+                - "el8"
+                - "fc39"
+        - key: CVE-2024-88888
+          value:
+            VulnerableVersions:
+              - ">=7.61.1-14.el8"
+            PatchedVersions: []
+            Severity: 3
+            Custom:
+              identifiers:
+                - "el8"
+        - key: CVE-2024-FC39-ONLY
+          value:
+            VulnerableVersions:
+              - ">= 7.76.1-14.fc39, < 7.76.1-26.fc39"
+            PatchedVersions:
+              - "7.76.1-26.fc39"
+            Severity: 2
+            Custom:
+              identifiers:
+                - "fc39"
