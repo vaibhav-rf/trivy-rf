@@ -329,6 +329,48 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
+			// Cross-major RPM: an .el8 package installed inside a RHEL 9 curated
+			// image must be looked up in the "rapidfort Red Hat 8" bucket, keyed
+			// by the package's own dist tag, not the image's OS version.
+			// splitRedHat routes ranges by identifier, so the el8-tagged range
+			// lives under Red Hat 8 regardless of which host-major key carried it.
+			name:   "RedHat: cross-major el8 package on RHEL 9 image routes to Red Hat 8 bucket",
+			baseOS: ftypes.RedHat,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "9",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.61.1-20.el8",
+						SrcName:    "curl",
+						SrcVersion: "7.61.1-20.el8",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2023-EL8-ONLY",
+					InstalledVersion: "7.61.1-20.el8",
+					FixedVersion:     "7.61.1-30.el8",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+			},
+		},
+		{
 			// A bare .rf rebuild routes to the distribution-less "rapidfort" bucket
 			// and matches the rf ranges. The DataSource has no BaseID.
 			name:   "RedHat: rf- package with bare .rf suffix routes to the RapidFort bucket",

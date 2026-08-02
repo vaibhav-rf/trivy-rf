@@ -102,7 +102,13 @@ func (s *Scanner) route(installedVer, osVer string) (ecosystem.Type, string) {
 			return ecosystem.Fedora, num // "fc43" → "rapidfort fedora 43" bucket
 		case "rf":
 			return ecosystem.RapidFort, "" // ".rf"/".rfN" → distribution-less "rapidfort" bucket
-		default: // "el" or untagged → "rapidfort Red Hat <major>" bucket, keyed by the OS version
+		case "el":
+			// Use the package's own major so a cross-major RPM (e.g. an .el8
+			// package inside a RHEL 9 image) hits the bucket the DB routed its
+			// range into. splitRedHat keys ranges by their identifier, not by
+			// the host OS version.
+			return ecosystem.RedHat, num
+		default: // untagged → "rapidfort Red Hat <major>" bucket, keyed by the OS version
 			return ecosystem.RedHat, osVer
 		}
 	}

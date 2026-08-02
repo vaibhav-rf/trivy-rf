@@ -87,6 +87,17 @@
             PatchedVersions:
               - "99.99.99-1.el9"
             Severity: 1
+- bucket: rapidfort Red Hat 8
+  pairs:
+    - bucket: curl
+      pairs:
+        - key: CVE-2023-EL8-ONLY
+          value:
+            VulnerableVersions:
+              - ">= 7.61.1-14.el8, < 7.61.1-30.el8"
+            PatchedVersions:
+              - "7.61.1-30.el8"
+            Severity: 2
 - bucket: rapidfort fedora 39
   pairs:
     - bucket: curl
