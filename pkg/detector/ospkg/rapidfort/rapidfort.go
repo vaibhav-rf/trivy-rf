@@ -40,8 +40,8 @@ func rpmDistTag(ver string) (tag, num string) {
 
 // dpkgHasRfMarker reports whether a Debian/Ubuntu version string carries a
 // RapidFort rebuild marker. The feed uses two conventions: "+rf" (e.g.
-// "0:2.5.2-1build1+rf.1") and the older "rfubu" concatenation (e.g.
-// "0:2.46-10rfubu"). Both signal the same "rf" identifier on the DB side.
+// "0:2.5.2-1build1+rf.1") and "rfubu" (e.g. "0:2.46-10rfubu"). Both signal
+// the same "rf" identifier on the DB side.
 func dpkgHasRfMarker(ver string) bool {
 	return strings.Contains(ver, "+rf") || strings.Contains(ver, "rfubu")
 }
