@@ -222,12 +222,6 @@ func (s *Scanner) isVulnerable(ctx context.Context, installedVersion string, adv
 		return false
 	}
 
-	for _, fixedVer := range adv.PatchedVersions {
-		if result, err := s.comparer.Compare(installedVersion, fixedVer); err == nil && result == 0 {
-			return false
-		}
-	}
-
 	// An empty range list means "all versions are vulnerable" (the advisory
 	// exists but has no fixed version yet).
 	if len(adv.VulnerableVersions) == 0 {

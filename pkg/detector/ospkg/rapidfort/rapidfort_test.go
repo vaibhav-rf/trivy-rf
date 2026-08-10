@@ -927,14 +927,6 @@ func TestScanner_IsVulnerable(t *testing.T) {
 			want:             true,
 		},
 		{
-			name:             "Fixed-version-first: installed equals patched, not vulnerable even if range would include it",
-			baseOS:           ftypes.Ubuntu,
-			installedVersion: "7.81.0-1ubuntu1.15",
-			vulnerableRanges: []string{">= 0, < 7.81.0-1ubuntu1.16"},
-			patchedVersions:  []string{"7.81.0-1ubuntu1.15"},
-			want:             false,
-		},
-		{
 			name:             "RedHat el9: vulnerable — installed below el9 fix",
 			baseOS:           ftypes.RedHat,
 			installedVersion: "7.76.1-20.el9",
