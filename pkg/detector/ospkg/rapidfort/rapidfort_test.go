@@ -197,6 +197,8 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
+			// Without an rf marker in the version, the package routes to the
+			// versioned Ubuntu bucket and can't match the rf-tagged range.
 			name:   "Ubuntu: plain-ubuntu package for rf-binutils patched under ubuntu range only, no cross-match",
 			baseOS: ftypes.Ubuntu,
 			fixtures: []string{
