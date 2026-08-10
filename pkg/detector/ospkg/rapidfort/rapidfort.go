@@ -114,7 +114,11 @@ func (s *Scanner) route(installedVer, osVer string) (ecosystem.Type, string) {
 			return ecosystem.Fedora, num
 		case "rf":
 			return ecosystem.RedHat, ""
-		default: // "el" or untagged
+		case "el":
+			// Use the package's own dist-tag major, not osVer: an .el8
+			// package inside a RHEL 9 image belongs to the Red Hat 8 bucket.
+			return ecosystem.RedHat, num
+		default: // untagged
 			return ecosystem.RedHat, osVer
 		}
 	}

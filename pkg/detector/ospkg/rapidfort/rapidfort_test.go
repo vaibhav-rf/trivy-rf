@@ -481,6 +481,46 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
+			// The el-tagged package's own major decides the bucket, not the
+			// image's OS version: an .el8 package on a RHEL 9 host must hit
+			// the Red Hat 8 bucket where el8 advisories live.
+			name:   "RedHat: cross-major .el8 package on RHEL 9 image routes to Red Hat 8 bucket",
+			baseOS: ftypes.RedHat,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "9",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "curl",
+						Version:    "7.61.1-20.el8",
+						SrcName:    "curl",
+						SrcVersion: "7.61.1-20.el8",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "curl",
+					VulnerabilityID:  "CVE-2023-EL8-ONLY",
+					InstalledVersion: "7.61.1-20.el8",
+					FixedVersion:     "7.61.1-30.el8",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "redhat",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityMedium.String(),
+					},
+				},
+			},
+		},
+		{
 			// Untagged RPMs fall back to the image's OS version, so on RHEL 9
 			// they share the bucket with el9 packages and hit the same advisories.
 			name:   "RedHat: untagged RPM routes to the base Red Hat bucket",
