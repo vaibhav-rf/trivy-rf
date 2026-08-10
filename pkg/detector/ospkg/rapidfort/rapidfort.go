@@ -39,8 +39,8 @@ func rpmDistTag(ver string) (tag, num string) {
 }
 
 // dpkgHasRfMarker reports whether a Debian/Ubuntu version string carries the
-// "rfubu" substring RapidFort embeds in its Ubuntu rebuild revisions — the
-// same signal the feed annotator uses to tag rf ranges.
+// "rfubu" substring (e.g. "0:2.46-10rfubu") — the same signal the feed
+// annotator uses to tag rf ranges.
 func dpkgHasRfMarker(ver string) bool {
 	return strings.Contains(ver, "rfubu")
 }

@@ -296,6 +296,8 @@ func TestScanner_Detect(t *testing.T) {
 			want: nil,
 		},
 		{
+			// fc39 and rf copies of the same CVE live in separate buckets,
+			// so FixedVersion carries the el9 fix alone.
 			name:   "RedHat: vulnerable el9 curl (below el9 fix)",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
@@ -386,6 +388,9 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
+			// Routes by the package's dist tag, not the image's OS: an fc39
+			// package on a RHEL 9 host goes to the Fedora bucket, not to the
+			// host's Red Hat bucket.
 			name:   "RedHat: fc39 curl routes to the Fedora bucket",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
@@ -476,6 +481,8 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
+			// Untagged RPMs fall back to the image's OS version, so on RHEL 9
+			// they share the bucket with el9 packages and hit the same advisories.
 			name:   "RedHat: untagged RPM routes to the base Red Hat bucket",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
