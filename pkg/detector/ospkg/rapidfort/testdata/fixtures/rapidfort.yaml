@@ -165,3 +165,13 @@
             PatchedVersions:
               - "0:2.46-10rfubu"
             Severity: 2
+    # Second rebuild-version convention: "+rf" suffix instead of "rfubu".
+    - bucket: openjpeg
+      pairs:
+        - key: CVE-2019-6988
+          value:
+            VulnerableVersions:
+              - ">= 0:0, < 0:2.5.2-1build1+rf.1"
+            PatchedVersions:
+              - "0:2.5.2-1build1+rf.1"
+            Severity: 1

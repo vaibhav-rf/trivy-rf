@@ -158,6 +158,45 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
+			// Regression: dpkgHasRfMarker previously matched only "rfubu",
+			// missing the "+rf" convention used by newer feed entries.
+			name:   "Ubuntu: +rf-marked package routes to the RapidFort bucket and matches the rf range",
+			baseOS: ftypes.Ubuntu,
+			fixtures: []string{
+				"testdata/fixtures/rapidfort.yaml",
+				"testdata/fixtures/data-source.yaml",
+			},
+			args: args{
+				osVer: "22.04",
+				pkgs: []ftypes.Package{
+					{
+						Name:       "openjpeg",
+						Version:    "0:2.5.2-1build0+rf.0",
+						SrcName:    "openjpeg",
+						SrcVersion: "0:2.5.2-1build0+rf.0",
+					},
+				},
+			},
+			want: []types.DetectedVulnerability{
+				{
+					PkgName:          "openjpeg",
+					VulnerabilityID:  "CVE-2019-6988",
+					InstalledVersion: "0:2.5.2-1build0+rf.0",
+					FixedVersion:     "0:2.5.2-1build1+rf.1",
+					SeveritySource:   "rapidfort",
+					DataSource: &dbTypes.DataSource{
+						ID:     "rapidfort",
+						BaseID: "ubuntu",
+						Name:   "RapidFort Security Advisories",
+						URL:    "https://github.com/rapidfort/security-advisories",
+					},
+					Vulnerability: dbTypes.Vulnerability{
+						Severity: dbTypes.SeverityLow.String(),
+					},
+				},
+			},
+		},
+		{
 			name:   "Ubuntu: plain-ubuntu package for rf-binutils patched under ubuntu range only, no cross-match",
 			baseOS: ftypes.Ubuntu,
 			fixtures: []string{
