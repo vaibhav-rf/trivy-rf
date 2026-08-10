@@ -121,9 +121,6 @@ func TestScanner_Detect(t *testing.T) {
 			want: nil,
 		},
 		{
-			// rf-marked Ubuntu package routes to the bare "rapidfort" bucket,
-			// where the rf-tagged range for rf-binutils lives (per splitUbuntu
-			// on the DB side). Below the rf fix → vulnerable.
 			name:   "Ubuntu: rfubu package routes to the RapidFort bucket and matches the rf range",
 			baseOS: ftypes.Ubuntu,
 			fixtures: []string{
@@ -161,11 +158,6 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
-			// The false-positive case from knqyf263's review: a plain-ubuntu
-			// version (no "rfubu" marker) for the rf-binutils package must NOT
-			// cross-match the rf-tagged range in the "rapidfort ubuntu" bucket.
-			// Routing sends it to the versioned Ubuntu bucket, where the
-			// ubuntu-tagged fix says 3ubuntu2 is patched → no CVE reported.
 			name:   "Ubuntu: plain-ubuntu package for rf-binutils patched under ubuntu range only, no cross-match",
 			baseOS: ftypes.Ubuntu,
 			fixtures: []string{
@@ -186,9 +178,6 @@ func TestScanner_Detect(t *testing.T) {
 			want: nil,
 		},
 		{
-			// Same rf-binutils package but at an older ubuntu version, below
-			// the ubuntu fix. Ubuntu bucket returns the ubuntu range and the
-			// scanner correctly reports vulnerable.
 			name:   "Ubuntu: plain-ubuntu package for rf-binutils below ubuntu fix reports the ubuntu-tagged advisory",
 			baseOS: ftypes.Ubuntu,
 			fixtures: []string{
@@ -226,13 +215,10 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
-			// Cross-format isolation: the fixture has an rf-openssl range in
-			// the RPM-format "rapidfort redhat" bucket ("< 1:3.2.2-20.rf").
-			// An Ubuntu rfubu package at 3.5.7-10rfubu+rf.0 (no explicit epoch)
-			// would falsely satisfy that range under dpkg comparison because
-			// dpkg reads "1:" as epoch 1 and treats an epoch-less version as
-			// epoch 0. Routing must send it to "rapidfort ubuntu" (dpkg-only)
-			// where the RPM range is not present, so no CVE is reported.
+			// A dpkg-format installed version with no explicit epoch would
+			// falsely satisfy an RPM range whose leading "1:" dpkg reads as
+			// epoch 1 (epoch 0 < epoch 1 always wins under dpkg comparison),
+			// so the RedHat rf bucket must never be queried on an Ubuntu scan.
 			name:   "Ubuntu: rf-openssl rfubu package must not cross-match the RedHat rf-openssl range",
 			baseOS: ftypes.Ubuntu,
 			fixtures: []string{
@@ -310,9 +296,6 @@ func TestScanner_Detect(t *testing.T) {
 			want: nil,
 		},
 		{
-			// el9 package routes to the "rapidfort Red Hat 9" bucket and sees only
-			// el9 ranges. The fc39/rf copies of CVE-2023-27536 live in separate
-			// buckets, so FixedVersion carries the el9 fix alone.
 			name:   "RedHat: vulnerable el9 curl (below el9 fix)",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
@@ -366,8 +349,6 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
-			// CVE-2023-27536 is patched (installed == el9 patched version).
-			// CVE-2024-99999 is an open/unfixed vulnerability and remains reported.
 			name:   "RedHat: patched el9 curl (CVE-2023-27536 fixed, CVE-2024-99999 still open)",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
@@ -405,9 +386,6 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
-			// An fc39 package routes to the "rapidfort fedora 39" bucket (not the
-			// image's Red Hat 9 bucket), so it sees the fc39 ranges — including the
-			// fedora-only advisory — and reports the DataSource with BaseID "fedora".
 			name:   "RedHat: fc39 curl routes to the Fedora bucket",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
@@ -461,8 +439,6 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
-			// A bare .rf rebuild routes to the distribution-less "rapidfort" bucket
-			// and matches the rf ranges. The DataSource has no BaseID.
 			name:   "RedHat: rf- package with bare .rf suffix routes to the RapidFort bucket",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
@@ -500,8 +476,6 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
-			// An untagged RPM (no el/fc/rf dist tag) routes to the base Red Hat
-			// bucket keyed by the image's OS version, matching the el9 advisories there.
 			name:   "RedHat: untagged RPM routes to the base Red Hat bucket",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
@@ -555,12 +529,9 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
-			// Source→binary fallback: rpm-sequoia is the installed binary,
-			// rust-rpm-sequoia is its SRPM. CVE-2025-0977 lives in the SRPM
-			// bucket (primary lookup). CVE-2026-2625 lives in the binary
-			// bucket (must be picked up by the fallback). CVE-2025-OVERLAP
-			// is present in both buckets — dedupe must keep the SRPM entry
-			// (Severity High, fix 1.9.0-1.el9), not the binary one.
+			// SRPM lookup is primary; binary-name lookup is a fallback that
+			// catches CVEs the feed mis-keys on the binary. When the same CVE
+			// appears in both, the SRPM entry wins on dedupe.
 			name:   "RedHat: source→binary fallback picks up binary-keyed advisory",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
@@ -599,7 +570,6 @@ func TestScanner_Detect(t *testing.T) {
 					PkgName:          "rpm-sequoia",
 					VulnerabilityID:  "CVE-2025-OVERLAP",
 					InstalledVersion: "1.0.0-1.el9",
-					// SRPM entry wins on dedupe: fix = 1.9.0-1.el9, not 99.99.99-1.el9.
 					FixedVersion:   "1.9.0-1.el9",
 					SeveritySource: "rapidfort",
 					DataSource: &dbTypes.DataSource{
@@ -609,7 +579,6 @@ func TestScanner_Detect(t *testing.T) {
 						URL:    "https://github.com/rapidfort/security-advisories",
 					},
 					Vulnerability: dbTypes.Vulnerability{
-						// SRPM entry wins: High, not Low from the binary bucket.
 						Severity: dbTypes.SeverityHigh.String(),
 					},
 				},
@@ -632,10 +601,9 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
-			// When pkg.Name == pkg.SrcName the binary bucket must NOT be
-			// queried. CVE-2026-2625 lives only in the rpm-sequoia bucket;
-			// for an installed package whose Name and SrcName both equal
-			// rust-rpm-sequoia, it must not surface.
+			// The binary-name fallback fires only when pkg.Name != pkg.SrcName —
+			// otherwise a package installed under its own SRPM name would query
+			// the same bucket twice and double-count entries.
 			name:   "RedHat: no fallback when Name == SrcName (binary bucket not queried)",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
@@ -689,10 +657,9 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
-			// SrcName empty → falls back to pkg.Name internally (existing behavior).
-			// pkg.Name == derived srcName so the binary-name fallback must NOT
-			// fire — CVE-2025-0977 (only in the rust-rpm-sequoia bucket) must
-			// not appear.
+			// An empty SrcName is substituted with pkg.Name, which then equals
+			// the derived srcName — same case as Name==SrcName, so the
+			// binary-name fallback must still be suppressed.
 			name:   "RedHat: empty SrcName falls back to Name, no second lookup",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
