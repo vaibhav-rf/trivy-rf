@@ -481,9 +481,7 @@ func TestScanner_Detect(t *testing.T) {
 			},
 		},
 		{
-			// The el-tagged package's own major decides the bucket, not the
-			// image's OS version: an .el8 package on a RHEL 9 host must hit
-			// the Red Hat 8 bucket where el8 advisories live.
+			// Regression: previously routed by osVer, which sent .el8 to Red Hat 9.
 			name:   "RedHat: cross-major .el8 package on RHEL 9 image routes to Red Hat 8 bucket",
 			baseOS: ftypes.RedHat,
 			fixtures: []string{
