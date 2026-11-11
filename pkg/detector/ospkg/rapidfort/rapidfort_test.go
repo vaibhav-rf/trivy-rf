@@ -2393,6 +2393,10 @@ func TestDpkgHasRfMarker(t *testing.T) {
 		// The marker is the longer "rfdebian" string, so a shorter "rfdeb" prefix
 		// without the full word stays on the distro track.
 		{name: "rfdeb prefix without rfdebian", ver: "0:3.2.1-4rfdebjl", want: false},
+		// Debian revisions that begin with "rf." (no leading digit before the
+		// tag) carry the rebuild as the whole debian revision. Version taken
+		// from the live debconf feed on trixie images.
+		{name: "debian revision starting with rf.", ver: "1:1.5.91-rf.1", want: true},
 	}
 
 	for _, tt := range tests {
