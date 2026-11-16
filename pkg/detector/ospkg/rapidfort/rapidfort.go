@@ -72,16 +72,17 @@ func parseDistTag(elem string) (tag, num string, ok bool) {
 // dpkgHasRfMarker reports whether a Debian/Ubuntu version string carries a
 // RapidFort rebuild marker — the same signal the feed annotator writes as the
 // "rf" range identifier, so the routing decision here matches the DB build.
-// Four substring forms cover every rebuild spelling in the live feed; shapes
-// these forms do not match ("1surf1", "rfdebian") don't occur in real
-// OS/ubuntu or OS/debian data.
+// Six substring forms cover every rebuild spelling in the live feed.
 //
 //	"+rf"           Debian/Ubuntu revision suffix (e.g. "0:2.5.2-1build1+rf.1")
 //	"rfubu"         Ubuntu rebuilds — matches "rfubu", "rfubuntu", "rfubujl"
+//	"rfdebian"      Debian backport rebuilds — e.g. "14.2.0-29rfdebian~rf.1+bookworm1"
 //	".rf." / ".rf"  Debian bare-rf rebuild, mid-release or at the tail
+//	"-rf."          Debian revision beginning with rf (e.g. "1:1.5.91-rf.1" on debconf)
 func dpkgHasRfMarker(ver string) bool {
 	return strings.Contains(ver, "+rf") || strings.Contains(ver, "rfubu") ||
-		strings.Contains(ver, ".rf.") || strings.HasSuffix(ver, ".rf")
+		strings.Contains(ver, "rfdebian") || strings.Contains(ver, ".rf.") ||
+		strings.Contains(ver, "-rf.") || strings.HasSuffix(ver, ".rf")
 }
 
 // getters is package-level because a getter is not tied to a scanner: the
@@ -295,10 +296,16 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 				DataSource:       adv.DataSource,
 			}
 
+			// Carry RapidFort's curated prose on the embedded Vulnerability so
+			// FillInfo can restore it after the consolidated-bucket overwrite:
+			// the merged bucket's title/description come from the first non-empty
+			// upstream source in AllSourceIDs and would otherwise bury RapidFort's
+			// own wording for any CVE an upstream also carries.
+			vuln.Vulnerability.Title = adv.Title
+			vuln.Vulnerability.Description = adv.Description
+
 			if adv.Severity != dbTypes.SeverityUnknown {
-				vuln.Vulnerability = dbTypes.Vulnerability{
-					Severity: adv.Severity.String(),
-				}
+				vuln.Vulnerability.Severity = adv.Severity.String()
 				vuln.SeveritySource = adv.DataSource.ID
 			}
 
