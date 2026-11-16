@@ -491,3 +491,5 @@ tool (
 	golang.org/x/tools/cmd/goyacc
 	sigs.k8s.io/kind
 )
+
+replace github.com/aquasecurity/trivy-db => github.com/rfJanit/trivy-db v0.0.0-20261115165910-85565608457f

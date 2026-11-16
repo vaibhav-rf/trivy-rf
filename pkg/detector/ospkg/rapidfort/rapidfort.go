@@ -296,10 +296,16 @@ func (s *Scanner) Detect(ctx context.Context, osVer string, _ *ftypes.Repository
 				DataSource:       adv.DataSource,
 			}
 
+			// Carry RapidFort's curated prose on the embedded Vulnerability so
+			// FillInfo can restore it after the consolidated-bucket overwrite:
+			// the merged bucket's title/description come from the first non-empty
+			// upstream source in AllSourceIDs and would otherwise bury RapidFort's
+			// own wording for any CVE an upstream also carries.
+			vuln.Vulnerability.Title = adv.Title
+			vuln.Vulnerability.Description = adv.Description
+
 			if adv.Severity != dbTypes.SeverityUnknown {
-				vuln.Vulnerability = dbTypes.Vulnerability{
-					Severity: adv.Severity.String(),
-				}
+				vuln.Vulnerability.Severity = adv.Severity.String()
 				vuln.SeveritySource = adv.DataSource.ID
 			}
 

@@ -58,8 +58,13 @@ func TestScanner_Detect(t *testing.T) {
 						Name:   "RapidFort Security Advisories",
 						URL:    "https://github.com/rapidfort/security-advisories",
 					},
+					// Title and Description forward from the fixture's Advisory
+					// so the FillInfo overwrite has something to preserve for
+					// RapidFort-detected vulns.
 					Vulnerability: dbTypes.Vulnerability{
-						Severity: dbTypes.SeverityMedium.String(),
+						Severity:    dbTypes.SeverityMedium.String(),
+						Title:       "curl: out of heap memory issue due to missing limit on header quantity",
+						Description: "When curl retrieves an HTTP response, it stores the incoming headers so that they can be accessed later via the libcurl headers API.",
 					},
 				},
 				{
